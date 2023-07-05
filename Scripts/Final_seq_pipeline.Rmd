@@ -1,0 +1,198 @@
+---
+title: "Final Pipeline for Taxa Assignment"
+author: "Isabel Siles Asaff"
+output: html_notebook
+---
+
+### 1. Introduction
+
+The purpose of this script is to assign taxonomy to 16s rRNA gene sequencing processed by Novogene. DNA comes from 25 soil samples from the rhizosphere of WT and ptxD36 *N. tabacum* under different phosphorous concentrations. Reads are from V3V4 amplicon region and are 225 bases in length. More sample details regarding sample nomenclature will be provided below. 
+
+The pipeline is an adaptation from the DADA2 tutorial with the main differences on the filtering and trimming process due to the nature of my own data. Also, most of the objects created through the pipeline are saved on the R project folder to free some memory for the following process. 
+
+### 2. Libraries
+
+```{r}
+library(dada2); packageVersion("dada2")
+library(tidyverse)
+library(dplyr)
+```
+
+### 3. File pre-processing
+
+This section contains code that mainly focuses on preparing the files to be analyzed by DADA2. If samples were already filtered (See filter and trimming section), then ignore this section and go to Section 5.
+
+```{r}
+## Set path
+
+path <- "~/Grad_School/Maestria/Raw_data/16s/Reads"
+list.files(path)
+
+## Create a list with the sample names of forward and reverse reads
+
+# forward
+fnFs <- sort(list.files(path, pattern="_1.fq.gz", full.names = TRUE)) 
+# reverse
+fnRs <- sort(list.files(path, pattern="_2.fq.gz", full.names = TRUE)) 
+
+## Extract sample names
+
+sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
+```
+
+Based on nomenclature from Novogene reads 1 in each sample are forward reads while reads 2 are the reverse ones. It is important to note that these numbers in the file name are different from the sample number: A1-7,B1-7, C1-7, and D1-4
+
+### 4. Filtering and trimming 
+
+The main function for this section is `filterAndTrim()`. The code will include the following arguments:
+
+* Forward and reverse reads objects
+
+* Path for the filtered forward and reverse reads
+
+* `truncQ= 2` removing reads with a score less than or equal to 2
+
+* `maxN=0` remove reads with N bases(not specified bases). This parameter is necessary for downstream analysis
+
+* `truncLen` no truncation. Given that the sequenced amplicon regions we chose were V3V4, reads could not be truncated because then the merging step does not work properly.
+
+* `maxEE=c(5,2)`To discard reads with higher expected errors, EE. In this case, 5 was chose for forward reads (a less-strict value), and 2 for reverse reads. This values were selected based on quality plots. Moreover, this is the parameter that discards the most reads that is why it was modify from the original pipeline tutorial
+
+* The rest of the parameters are kept on the default values
+
+```{r}
+
+## Creating filtered reads path on an object for forwards and reverse reads
+
+filtFs <- file.path(path, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
+filtRs <- file.path(path, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
+
+## Assign sample names to filtered reads
+
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
+
+
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs,
+                     maxN=0, maxEE=c(5,2), truncQ=2, rm.phix=TRUE,
+                     compress=TRUE, multithread=FALSE)
+
+# out is an object just to compare the number of reads in (unfiltered) and the number of reads out (filtered)
+```
+
+### 5. Upload filtered samples
+
+Ignore this section if we finished section 4
+
+```{r}
+## Set new path 
+path <- "~/Grad_School/Maestria/Raw_data/16s/Reads/filtered"
+
+## Create a list with the sample names of forward and reverse reads
+
+# Forward 
+filtFs <- sort(list.files(path, pattern="_F_filt.fastq.gz", full.names = TRUE))
+# Reverse
+filtRs <- sort(list.files(path, pattern="_R_filt.fastq.gz", full.names = TRUE))
+```
+
+### 6. Error rates
+
+From this section forward the code takes longer to run, so all the outputs will be saved as __.Rdata__. Therefore, in case the code crushes just upload the necessary objects to the environment through the console.
+
+Error rates are estimated until convergence using a parametric error model. This code estimates how likely is for a base to actually be another one (i.e. transitions) using also the quality score of said base. This variable is needed for sample inference in the next section
+
+```{r}
+# Forward
+errF <- learnErrors(filtFs, multithread=TRUE) 
+save(errF,file="errF.RData")
+
+# Reverse
+errR <- learnErrors(filtRs, multithread=TRUE) 
+save(errR,file="errR.RData")
+
+## Plot error rates
+plotErrors(errF, nominalQ=TRUE)
+plotErrors(errR, nominalQ=TRUE)
+```
+
+The error plots show error rates  for each possible transition (A→C, A→G, …). Points are the observed error rates for each consensus quality score. The black line shows the estimated error rates after convergence of the machine-learning algorithm. The red line shows the error rates expected under the nominal definition of the Q-score. It is expected that the estimated error rates (black line) are a good fit to the observed rates (points), and the error rates drop with increased quality as expected.
+
+### 7. Sample inference
+
+This is the main step from the whole pipeline because it removes all the sequencing error to reveal the members of the sequenced community. This code uses the filtered reads and the error rates to denoise the samples. Given that in some soil samples some sequences abundance are low I decided to include pseudo-pooling in the code. 
+
+In pseudo-pooling samples are processed individually, but then self consisted steps increase sensitivity by using prior arguments. This is the best option between true pooling and no pooling based on processing speed and the number of chimeras. This was the longest running code.
+
+```{r}
+# Forward
+dadaFs_pspool <- dada(filtFs, err=errF, multithread=TRUE, pool = "pseudo")
+save(dadaRs_pspool, file = "dadaFs_pspool.RData")
+
+# Reverse
+dadaRs_pspool <- dada(filtRs, err=errR, multithread=TRUE, pool = "pseudo")
+save(dadaRs_pspool, file = "dadaRs_pspool.RData")
+```
+
+### 8. Merging forward and reverse reads
+
+After reads are denoised forward and reverse reads are merged. In this step several pairs are rejected when they do not sufficiently overlap or which contain too many (>0 by default) mismatches in the overlap region.
+
+```{r}
+mergers <- mergePairs(dadaFs_pspool, filtFs, dadaRs_pspool, filtRs, verbose=TRUE) 
+save(mergers, file = "mergers.RData")
+
+## Sequence table 
+
+seqtab <- makeSequenceTable(mergers) # very fast step
+dim(seqtab) # number of samples times number of ASVs
+
+# Check the length of all the merged sequences
+table(nchar(getSequences(seqtab)))
+```
+
+After merging data it is transformed into a sequence table. The table is a matrix in which rows are the samples, and columns are the sequences. The table is filled with the abundances that each sequence have per sample. Also, I need to check the length of the merged sequences because they cannot exceed 450 bases.
+
+### 9. Remove Chimeras 
+
+This code does not have any changes from the tutorial pipeline. Chimeras are artificial sequences that do not represent a real biological sequence.
+
+```{r}
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE) # long running time
+save(seqtab.nochim, file = "seqtabnoc.RData")
+
+## Inspecting non-chimeric sequence table
+dim(seqtab.nochim) 
+sum(seqtab.nochim)/sum(seqtab) # Percentage of non chimeric sequences kept by dividing them by the original merged reads
+```
+
+When comparing the non-chimeric sequence table with original sequence table, about 58% of the pairs were chimeras that were removed. However, if abundances are accounted for only about 8% of the merged sequenced reads were chimeras.
+
+### 10. Tracking reads 
+
+The code in this section is exactly the same from the pipeline, but it helps to track the number of reads removed through the pipeline. as expected we do not to see any major drops in reads between steps.
+
+```{r}
+
+getN <- function(x) sum(getUniques(x)) # create a function
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim)) 
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim") #order based on cbind
+rownames(track) <- sample.names # kept for all data frames 
+head(track) # show top of the data frame 
+
+## Save track table
+write.csv(track, "~/Grad_School/Maestria/Processed_data/Track_table.csv")
+```
+
+### 11. Assign taxonomy
+
+The database selection greatly affects Taxonomy ID and downstream analysis. Prior to this pipeline I compared Silva and RPD databases on a subset of data to see the difference in identification from both databases. In the upper levels Silva identified more taxa even though at the genus level both databases more or less are evened out. Therefore, based on a quick literature review based on soil ecology taxonomic analysis, I decided to use Silva version 138. Moreover, up to my knowledge a merged assignation between the two databases is not common practice, so in the scope of this study Silva will be used.
+
+```{r}
+taxa <- assignTaxonomy(seqtab.nochim, "~/Grad_School/Maestria/Raw_data/16s/Reads/tax/silva_nr99_v138.1_train_set.fa.gz",  multithread=TRUE)
+
+## Save for further analysis
+save(taxa, file = "taxaSilva.RData")
+```
+
+Even though it is possible to assign taxonomy up to species, I opted out for not doing it. In the preliminary analysis species identification was only possible for 79 reads out of thousands

@@ -1,0 +1,163 @@
+---
+title: "Phylogenetic Analysis"
+author: "Isabel Siles Asaff"
+output: html_document
+---
+
+### 1. Introduction
+
+This script follows DADA2 sample inference done DNA comes from 25 soil samples from the rhizosphere of WT and ptxD36 *N. tabacum* under different phosphorous concentrations. Phyloseq package is the basis for the following code as it integrates taxonomy data, abundance counts and sample meta data into one 'phyloseq' object facilitating its analysis. 
+
+### 2. Libraries 
+
+```{r include=FALSE}
+library("phyloseq"); packageVersion("phyloseq")
+library("ggplot2"); packageVersion("ggplot2")
+library("plyr"); packageVersion("plyr")
+library("cluster"); packageVersion("cluster")
+library("ape")
+library("vegan")
+library("patchwork")
+library("betapart")
+library("dplyr")
+library("remotes") # download remote libraries
+library("devtools") # install external packages
+library("ranacapa")
+library("breakaway")
+library("tidyverse")
+library("microbiome") # data analysis and visualisation
+library("wesanderson")
+library("ggforce")
+```
+
+### 3. Phyloseq-ize Data
+
+To use the phyloseq package, I need to create an object with three main components necessary for analysis: 
+
+* an OTU (in my case ASV) abundance matrix: (otu_table) contains the abundances of each sequence
+
+* a taxa matrix: (tax_table)  the assigned taxonomy for the sequences. One column for each of the taxonomic levels (From Kingdom to Genus)
+
+* A metadata data frame: (sample_data) this table contains all the sample information and helps on downstream analysis to separated sequences based of sample differences (i.e: treatments or plant type)
+
+```{r}
+### Upload data (obtained from DADA2 pipeline)
+
+load("~/Grad_School/Maestria/Nt_RD_analysis/seqtabnoc.RData") # abundances
+load("~/Grad_School/Maestria/Nt_RD_analysis/taxaSilva.RData") # taxa
+
+```
+
+#### OTU (ASV) table adaptations
+
+The main modification to the ASV table relies in giving a unique code to each sequence. This step was decided because haveing the full sequence as the name of each column increases file size very much. Therefore, downstream analysis is slowed down and preliminary visualizations of the matrix are very complicated. By generating a random 5 alphanumeric code downstream analysis was much easier, and original sequence numbers are still stored in the original R.object.
+
+```{r}
+# List with sample names
+
+sample_names <- c("A1","A2","A3","A4","A5","A6","A7",
+                  "B1","B2","B3","B4","B5","B6","B7",
+                  "C1","C2","C3","C4","C5","C6","C7",
+                  "D1","D2","D3","D4")
+
+# Rename rows to match sample names
+
+row.names(seqtab.nochim) <- sample_names
+
+### Generate random codes for columns
+
+rando <- function(n = 5000) {
+  a <- do.call(paste0, replicate(5, sample(LETTERS, n, TRUE), FALSE))
+  paste0(a, sprintf("%04d", sample(9999, n, TRUE)), sample(LETTERS, n, TRUE))
+}
+seqnames <- rando(15643) # 15643 is the number of sequences
+
+# Rename columns
+colnames(seqtab.nochim) <- seqnames
+
+## Save as csv
+write.csv(seqtab.nochim, "~/Grad_School/Maestria/Processed_data/ASVtable.csv")
+
+```
+
+#### Taxa table
+
+The taxa table undergoes the same procedure, but instead of changing column sequence names, in this case row names are changed with the radom codes generated in the previous step
+
+```{r}
+
+## Match sequence names
+row.names(taxa) <- seqnames
+
+## Save as csv
+write.csv(taxa, "~/Grad_School/Maestria/Processed_data/taxa_table.csv")
+
+```
+
+#### Meta data
+
+This dataframe does not need much modification just the addition of the sample names as row names since this data was previously organized in excel
+
+```{r}
+Sample_data <- read.csv("~/Grad_School/Maestria/Nt_RD_analysis/Sample_data.csv")
+
+## Name samples
+row.names(Sample_data) <- sample_names
+```
+
+#### Phyloseq object
+
+Finally, I join together these three tables into one object that will be used for all downstream analysis
+
+```{r}
+phylo_soil <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows = FALSE),
+                       sample_data(Sample_data),
+                       tax_table(taxa))
+# it is important to note that it needs to be specifies that taxa are not rows in the abundance table
+
+save(phylo_soil,file="phylo_soil.RData")
+```
+
+### 4. Data Preprocessing
+
+Before diversity analyses data needs to be filtered and low abundance sequences need to be removed as they can be misleading. Also unidentified taxa at the Phylum level were removed.
+
+```{r}
+### Filter taxa with low abundance ###
+
+load("phylo_soil.Rdata")
+
+# ASVs that are found in at least 3 different samples (based on the fact that each treatment has 3 repetitions)
+
+Psoil_filt <-  filter_taxa(phylo_soil, function(OTU) sum(OTU) > 3, TRUE)
+
+# Remove unidentified taxa
+
+Psoil_filt <- subset_taxa(Psoil_filt, !is.na(Phylum))
+
+### Transform to relative abundance ###
+
+Psoil_rel  <-  transform_sample_counts(Psoil_filt, function(x) (x / sum(x))) # in percentage
+# This divides the count of one species by the total number of species in that sample
+
+## Save both phyloseq objects
+
+save(Psoil_filt, file = "Psoil_filt.RData")
+save(Psoil_rel, file = "Psoil_rel.RData")
+```
+
+### 5. Alpha-Diversity
+
+Alpha diversity metrics summarize the structure of an ecological community with respect to its richness (number of taxonomic groups), evenness (distribution of abundances of the groups), or both. Alpha diversity is a term used to describe the "within-sample" diversity or  mean species diversity in a site (in this case a sample).
+
+There are several possible indices to measure Alpha-Diversity. The most common being is Shannon index. Other common measurements include the observed species number, Chao, ACE, and Fisher. For my analysis, I will compared raw observed data, Shannon, and Simpson indices from phyloseq, and Chao-Bunge index from another package because it provides variance estimates, account for unobserved taxa, and are not overly sensitive to the singleton count (the number of species observed once).
+
+-------
+None of the metrics showed significant differences between treatments implying there are no effects of phosphite addition or the transgenic plant of rhizosphere alpha diversity
+
+### 6. Taxonomic Composition
+
+This section does not have any statistical measurements, but it helps visualizing differences in taxonomy between the treatments. Here I will be using to types of graphs to represent taxonomic composition: 
+
+
+### 7. Beta-diversity
