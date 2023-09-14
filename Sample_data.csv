@@ -1,26 +1,26 @@
 ﻿Sample_ID,Plant_Type,Treatment,Replicate
 WLP_1,Wild Type,Low P,1
-36LP_1,ptxD-36,Low P,1
+36LP_1,ptxDNt-36,Low P,1
 WTC_1,Wild Type,Control,1
-36C_1,ptxD-36,Control,1
-36Phi_1,ptxD-36,Phi,1
+36C_1,ptxDNt-36,Control,1
+36Phi_1,ptxDNt-36,Phi,1
 WPM_1,Wild Type,Pi/Phi mix,1
-36PM_1,ptxD-36,Pi/Phi mix,1
+36PM_1,ptxDNt-36,Pi/Phi mix,1
 WTLP_2,Wild Type,Low P,2
-36LP_2,ptxD-36,Low P,2
+36LP_2,ptxDNt-36,Low P,2
 WTC_2,Wild Type,Control,2
-36C_2,ptxD-36,Control,2
-36Phi_2,ptxD-36,Phi,2
+36C_2,ptxDNt-36,Control,2
+36Phi_2,ptxDNt-36,Phi,2
 WTPM_2,Wild Type,Pi/Phi mix,2
-36PM_2,ptxD-36,Pi/Phi mix,2
+36PM_2,ptxDNt-36,Pi/Phi mix,2
 WTLP_3,Wild Type,Low P,3
-36LP_3,ptxD-36,Low P,3
+36LP_3,ptxDNt-36,Low P,3
 WTC_3,Wild Type,Control,3
-36C_3,ptxD-36,Control,3
-36Phi_3,ptxD-36,Phi,3
+36C_3,ptxDNt-36,Control,3
+36Phi_3,ptxDNt-36,Phi,3
 WTPM_3,Wild Type,Pi/Phi mix,3
-36PM_3,ptxD-36,Pi/Phi mix,3
-NPLP,No plant,Low P,C
-NPC,No plant,Control,C
-NPPhi,No plant,Phi,C
-NPPM,No plant,Pi/Phi mix,C
+36PM_3,ptxDNt-36,Pi/Phi mix,3
+NPLP,Bulk Soil,Low P,C
+NPC,Bulk Soil,Control,C
+NPPhi,Bulk Soil,Phi,C
+NPPM,Bulk Soil,Pi/Phi mix,C

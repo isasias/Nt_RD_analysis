@@ -253,7 +253,7 @@ ggplot(alpha_div, aes(x=Treatment, y=pielou, color = Plant_Type)) +
 
 Psoil_filt@sam_data$Treatment[Psoil_filt@sam_data$Treatment=="Control"] <- "Pi"
 bray_bdiv <- phyloseq::distance(Psoil_filt, method = "bray", type = "sample") # check how it looks with taxa type
-bray_ord <- ordinate(Psoil_filt,"NMDS", distance = bray_bdiv)
+bray_ord <- ordinate(Psoil_filt,"PCoA", distance = bray_bdiv)
 
 # ordination methods: 
 # c("RDA", "NMDS", "MDS", "PCoA")
@@ -284,7 +284,7 @@ p_bray <- p_bray +
 
 p_bray
 
-### Phyla heatmap ###
+#### Phyla heatmap ####
 
 Phyla_soil <- tax_glom(Psoil_filt,taxrank = "Phylum", NArm = FALSE)
 
@@ -757,7 +757,19 @@ ggplot(Exud_Top, aes(x = Treatment, y = Exud_11,
   scale_color_manual(name = "Plant type", values = c("burlywood3","steelblue","lightpink"))+
   xlab("Treatment") + ylab("Concentration")+
   ggtitle("Nicotinamide")+
-  theme(plot.title = element_text(hjust = 0))
+  theme(plot.title = element_text(hjust = 0))+
+  annotate(geom = "text", x = 1.12, y= 2.1e+08,  label="a",
+           color="black", size= 4.5)+
+  annotate(geom = "text", x = 2.12, y= 6.5e+08,  label="b",
+           color="black", size= 4.5)+
+  annotate(geom = "text", x = 3.2, y= 5e+08,  label="ab",
+           color="black", size= 4.5)+  
+  annotate(geom = "text", x = 4, y= 2e+08,  label="a",
+           color="black", size= 4.5)+
+  annotate(geom = "text", x = 4.25, y= 4.3e+08,  label="b",
+           color="black", size= 4.5)
+  
+  
 
 #  Exud_27
 ggplot(Exud_Top, aes(x = Treatment, y = Exud_27, 
@@ -768,7 +780,20 @@ ggplot(Exud_Top, aes(x = Treatment, y = Exud_27,
                      values = c("burlywood3","steelblue","lightpink"))+
   xlab("Treatment") + ylab("Concentration")+
   ggtitle("D-(+)-Glucose")+
-  theme(plot.title = element_text(hjust = 0))
+  theme(plot.title = element_text(hjust = 0))+
+  annotate(geom = "text", x = 1, y= 5.2e+09,  label="a",
+           color="black", size= 4.5)+
+  annotate(geom = "text", x = 1.26, y= 3e+09,  label="ab",
+           color="black", size= 4.5)+
+  annotate(geom = "text", x = 2.12, y= 2.3e+09,  label="b",
+           color="black", size= 4.5)+
+  annotate(geom = "text", x = 3.2, y= 5e+09,  label="ab",
+           color="black", size= 4.5)+
+  annotate(geom = "text", x = 4, y= 5.2e+09,  label="a",
+           color="black", size= 4.5)+
+  annotate(geom = "text", x = 4.26, y= 4e+09,  label="ab",
+           color="black", size= 4.5)
+  
 
 # Exud_ 47
 

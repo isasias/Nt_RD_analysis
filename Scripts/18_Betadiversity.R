@@ -16,7 +16,7 @@ load("Psoil_filt.Rdata")
 load("Psoil_rel.RData")
 
 bray_bdiv <- phyloseq::distance(Psoil_filt, method = "bray", type = "sample") # check how it looks with taxa type
-bray_ord <- ordinate(Psoil_filt,"NMDS", distance = bray_bdiv)
+bray_ord <- ordinate(Psoil_filt,"PCoA", distance = bray_bdiv)
 
 p_bray <- plot_ordination(Psoil_filt, bray_ord, "samples", 
                           color = "Plant_Type",

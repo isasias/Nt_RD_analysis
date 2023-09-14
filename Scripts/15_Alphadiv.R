@@ -1,7 +1,7 @@
 #### Libraries ####
 library("phyloseq"); packageVersion("phyloseq")
 library("ggplot2"); packageVersion("ggplot2")
-library("patchwork")
+library("patchwork") # graph placement
 library("dplyr")
 library("remotes") # download remote libraries
 library("devtools")
@@ -55,13 +55,10 @@ alphadiv <- cbind(alphadiv,Evenness)
 
 write.csv(alphadiv, "~/Grad_School/Maestria/Processed_data/Alphadiversity.csv")
 
-```
 
 #### Alpha diversity plots
 
-This section will be done with the basic phyloseq function but also I create a graph comparing Chao1 and Chao-Bunge indices, and an evenness plot.
-
-```{r}
+# This section will be done with the basic phyloseq function but also I create a graph comparing Chao1 and Chao-Bunge indices, and an evenness plot.
 
 # Indices plot
 
@@ -118,9 +115,8 @@ Simpsoneven <- Simpsoneven + theme(legend.position = "none")
 
 #### Statistical analysis for Alpha Diversity
 
-I will check if there are any significant differences between treatments and plant type using ANOVAS.
+# I will check if there are any significant differences between treatments and plant type using ANOVAS.
 
-```{r}
 ### Observed 
 
 obs_anova <- aov(Observed ~ Plant_Type * Treatment, 
@@ -187,4 +183,3 @@ leveneTest(simpson ~ Plant_Type * Treatment,
 
 Anova(Evsim_anova) # not significant difference
 
-```

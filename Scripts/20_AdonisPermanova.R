@@ -58,7 +58,7 @@ data.scores <- as.data.frame(Soilscores[["sites"]])
 
 ggplot(data=data.scores) + 
   stat_ellipse(aes(x=NMDS1,y=NMDS2,colour=SoilMeta$Plant_Type),level = 0.50) +
-  geom_point(aes(x=NMDS1,y=NMDS2,shape=SoilMeta$Plant_Type,colour=SoilMeta$Plant_Type),size=4) + 
+  geom_point(aes(x=NMDS1,y=NMDS2,shape=SoilMeta$Treatment,colour=SoilMeta$Plant_Type),size=4) + 
   theme_minimal() # using sites do not know why
 
 # it seems there were no significant differences no matter the iterations
