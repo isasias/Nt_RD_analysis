@@ -1,0 +1,522 @@
+---
+title: "Diversity Indices 16S & ITS"
+author: "Isabel Siles Asaff"
+date: "2023-08-14"
+output: html_document
+---
+
+## Introduction
+
+Once data has been pre-processed and filtered alfa and beta diversity need to be calculated. Specifically in this project bacterial and fungal diversity are in two separated objects and as they were sequenced as 16s and ITS regions respectively. However, both datasets will be analyzed using the same work pipeline.
+
+## Libraries
+
+```{r include=FALSE}
+library(phyloseq); packageVersion(phyloseq)
+library(ggplot2); packageVersion(ggplot2)
+library(vegan)
+library(breakaway) # chao-bunge
+library(microbiome) # species evenness
+library(RColorBrewer)
+library(tidyverse)
+library(dplyr)
+library(car) # ANOVA
+```
+
+## Data
+
+```{r}
+### Upload
+
+load("ITS_filt.RData")
+load("Psoil_filt.Rdata")
+
+### Rename samples
+
+Psoil_filt@sam_data$Treatment[Psoil_filt@sam_data$Treatment == "Control"] <- "Pi"
+Psoil_filt@sam_data$Plant_Type[Psoil_filt@sam_data$Plant_Type == "No plant"] <- "Bulk Soil"
+Psoil_filt@sam_data$Plant_Type[Psoil_filt@sam_data$Plant_Type == "ptxD-36"] <- "ptxDNt-36"
+
+```
+
+## Alpha Diversity
+
+### Calculating Alpha Diversity Estimators 
+
+```{r}
+### Separate metadata for table
+
+samplemeta <- as.data.frame(ITS_filtered@sam_data)
+
+### Calculate alpha diversity using phyloseq package
+
+# 16S
+alpha_16S <- estimate_richness(Psoil_filt, 
+                              split = TRUE, 
+                              measures = NULL)
+
+# ITS
+alpha_ITS <- estimate_richness(ITS_filtered, 
+                              split = TRUE, 
+                              measures = NULL)
+
+### Join alpha indices to metadata
+
+alpha_16S <- cbind(samplemeta,alpha_16S)
+alpha_ITS <- cbind(samplemeta,alpha_ITS)
+
+### Calculate species evenness
+
+Even_16S <- evenness(Psoil_filt, index = 'all',
+                     zeroes = TRUE, detection = 0) 
+Even_ITS <- evenness(ITS_filtered, index = 'all',
+                     zeroes = TRUE, detection = 0) 
+
+## Add evenness to existing tables  
+alpha_16S <- cbind(alpha_16S,Even_16S)
+alpha_ITS <- cbind(alpha_ITS,Even_ITS)
+
+### Save files 
+
+write.csv(alpha_16S, "~/Grad_School/Maestria/Processed_data/Alphadiversity.csv")
+write.csv(alpha_ITS, "~/Grad_School/Maestria/Processed_data/Alphadiv_ITS.csv")
+
+```
+
+### Plotting Alpha Diversity
+
+```{r}
+### Arrange variable names in order
+
+# 16S
+Psoil_filt@sam_data$Plant_Type <- factor(Psoil_filt@sam_data$Plant_Type, levels = c("ptxDNt-36", "Wild Type", "Bulk Soil"))
+
+Psoil_filt@sam_data$Treatment <- factor(Psoil_filt@sam_data$Treatment, levels = c("Low P", "Pi", "Phi", "Pi/Phi mix"))
+
+# ITS
+ITS_filtered@sam_data$Plant_Type <- factor(ITS_filtered@sam_data$Plant_Type, levels = c("ptxDNt-36", "Wild Type", "Bulk Soil"))
+
+ITS_filtered@sam_data$Treatment <- factor(ITS_filtered@sam_data$Treatment, levels = c("Low P", "Pi", "Phi", "Pi/Phi mix"))
+
+### Plot richness using microbiome
+
+# 16S
+PR_16S <- plot_richness(ITS_filtered, x="Treatment",
+              measures=c("Observed","Shannon","Simpson","Chao1"),
+              color="Plant_Type")+
+          scale_fill_manual(breaks=c("ptxDNt-36","Wild Type","Bulk Soil"),
+          labels=c("ptxDNt-36","Wild Type","Bulk soil"))+
+          scale_color_manual(values = c("steelblue","lightpink","burlywood3"), 
+          name = "Plant Type", 
+          labels= c("ptxDNt-36","Wild Type","Bulk soil")) +
+  theme_bw()
+
+PR_16S$layers <- PR_16S$layers[-1]
+PR_16S <- PR_16S + geom_point(size=4, alpha=0.7)
+PR_16S
+
+# ITS
+PR_ITS <- plot_richness(ITS_filtered, x="Treatment",
+              measures=c("Observed","Shannon","Simpson","Chao1"),
+              color="Plant_Type")+
+          scale_fill_manual(breaks=c("ptxDNt-36","Wild Type","Bulk Soil"),
+          labels=c("ptxDNt-36","Wild Type","Bulk soil"))+
+          scale_color_manual(values = c("steelblue","lightpink","burlywood3"), 
+          name = "Plant Type", 
+          labels= c("ptxDNt-36","Wild Type","Bulk soil")) +
+  theme_bw()
+
+PR_ITS$layers <- PR_ITS$layers[-1]
+PR_ITS <- PR_ITS + geom_point(size=4, alpha=0.7)
+PR_ITS
+
+### Pielou: example of evenness index
+
+# 16S
+ggplot(alpha_16S, aes(x=Treatment, y=pielou, color = Plant_Type))+
+  geom_point(size = 4, alpha=0.7) +
+  scale_color_manual(values = c("burlywood3","steelblue","lightpink"))+
+  theme_bw()
+
+# ITS
+ggplot(alpha_ITS, aes(x=Treatment, y=pielou, color = Plant_Type))+
+  geom_point(size = 4, alpha=0.7) +
+  scale_color_manual(values = c("burlywood3","steelblue","lightpink"))+
+  theme_bw()
+
+```
+
+### Statistical analysis
+
+```{r}
+### Upload data 
+
+# Only if starting in this part of the document
+
+# 16S
+alpha_16S <- read.csv("~/Grad_School/Maestria/Processed_data/Alphadiversity.csv")
+row.names(alpha_16S) <- alpha_16S[,1]
+alpha_16S <- alpha_16S[,-1]
+
+# ITS
+alpha_ITS <- read.csv("~/Grad_School/Maestria/Processed_data/Alphadiv_ITS.csv")
+row.names(alpha_ITS) <- alpha_ITS[,1]
+alpha_ITS <- alpha_ITS[,-1]
+
+### Check data normalization
+
+# histograms
+for (i in 5:18) { 
+  hist(alpha_16S[,i],
+       main = i)
+}
+# shapiro test
+for(i in 5:18){
+  shapiro <- shapiro.test(alpha_16S[,i])
+  normal <- ifelse(shapiro[["p.value"]]>0.05, "YES","NO")
+  print(c(i,normal))
+}
+
+# repeat for ITS object
+
+### Estimators for 16S
+
+## Observed 
+
+# ANOVA
+ad_anova <- aov(Observed ~ Plant_Type * Treatment, 
+                   data = alpha_16S) # synergistic effect
+Anova(ad_anova) # not significant
+
+## Chao1 
+
+# ANOVA
+ad_anova <- aov(Chao1 ~ Plant_Type * Treatment, 
+                data = alpha_16S) # synergistic effect
+Anova(ad_anova) # not significant
+
+## Shannon
+
+# ANOVA
+ad_anova <- aov(Shannon ~ Plant_Type * Treatment, 
+                data = alpha_16S) # synergistic effect
+Anova(ad_anova) # not significant
+
+## Simpson
+
+# ANOVA
+ad_anova <- aov(Simpson ~ Plant_Type * Treatment, 
+                data = alpha_16S) # synergistic effect
+Anova(ad_anova) # not significant 
+
+## Pielou
+
+# ANOVA
+ad_anova <- aov(pielou ~ Plant_Type * Treatment, 
+                data = alpha_16S) # synergistic effect
+Anova(ad_anova) # not significant
+
+### Estimators for ITS
+
+## Observed
+
+# ANOVA
+
+ad_anova <- aov(Observed ~ Plant_Type * Treatment, 
+                   data = alpha_ITS) # synergistic effect
+Anova(ad_anova) # signifcant in plant:treatment
+
+# Test homogeneity of variance
+
+plot(ad_anova, 1) # check outliers
+leveneTest(Observed ~ Plant_Type * Treatment, 
+           data = alpha_16S) # higher than 0.05 so it meets ANOVA assumption
+
+# Tukey HSD 
+
+ad_Tukey <- TukeyHSD(ad_anova) # bulk soil Pi/Phi is statistically different from several samples
+
+## Chao1
+
+# ANOVA
+ad_anova <- aov(Chao1 ~ Plant_Type * Treatment, 
+                data = alpha_ITS) # synergistic effect
+Anova(ad_anova) # significant in plant:treatment
+
+# Test homogeneity of variance
+
+plot(ad_anova, 1) # check outliers
+leveneTest(Observed ~ Plant_Type * Treatment, 
+           data = alpha_ITS) # higher than 0.05 so it meets ANOVA assumption
+
+# Tukey HSD 
+
+ad_Tukey <- TukeyHSD(ad_anova) # bulk soil Pi/Phi is statistically different from several samples
+
+## Shannon
+
+# ANOVA
+ad_anova <- aov(Shannon ~ Plant_Type * Treatment, 
+                data = alpha_ITS) # synergistic effect
+Anova(ad_anova) # not significant
+
+## Simpson
+
+# ANOVA
+ad_anova <- aov(Simpson ~ Plant_Type * Treatment, 
+                data = alpha_ITS) # synergistic effect
+Anova(ad_anova) # not significant 
+
+## Pielou
+
+# ANOVA
+ad_anova <- aov(pielou ~ Plant_Type * Treatment, 
+                data = alpha_ITS) # synergistic effect
+Anova(ad_anova) # not significant
+
+```
+
+## Beta Diversity
+
+### Distance and ordination calculations
+
+```{r}
+### 16S
+
+## Distances
+
+# Bray Distance
+bray_16S <- phyloseq::distance(Psoil_filt, 
+                                method = "bray", type = "sample")
+
+# Jaccard: Presence/Absence 
+jacc_16s <- phyloseq::distance(Psoil_filt, 
+                                method = "jaccard", binary = TRUE,
+                                type = "sample") # binary argument needed 
+
+## Ordination methods
+
+# NMDS
+B_ord16S <- ordinate(ITS_filtered,"NMDS", distance = bray_16S)
+
+# PCoA
+J_ord16S <- ordinate(ITS_filtered,"PCoA", distance = jacc_16s)
+
+# Distance and ordination methods can be iterated
+
+
+### ITS
+
+## Distances
+
+# Bray Distance
+bray_bdiv <- phyloseq::distance(ITS_filtered, 
+                                method = "bray", type = "sample")
+
+# Jaccard: Presence/Absence 
+jacc_bdiv <- phyloseq::distance(ITS_filtered, 
+                                method = "jaccard", binary = TRUE,
+                                type = "sample") # binary argument needed 
+
+## Ordination methods
+
+# NMDS
+bray_ord <- ordinate(ITS_filtered,"NMDS", distance = bray_bdiv)
+
+# PCoA
+jacc_ord <- ordinate(ITS_filtered,"PCoA", distance = jacc_bdiv)
+
+```
+
+### Plotting distances 
+
+```{r}
+
+### 16S
+
+## Bray
+
+p_bray <- plot_ordination(Psoil_filt, B_ord16S, "samples", 
+                          color = "Plant_Type",
+                          shape = "Treatment")+
+  scale_color_manual(values = c("steelblue","lightpink","burlywood3"), name = "Plant Type")+
+  theme_bw()+
+  geom_point(size=3)
+
+shape_names <- c("Pi","Low P","Phi", "Pi/Phi mix")
+p.shape <- 15:(15 + length(shape_names) - 1)
+names(p.shape) <- shape_names
+p.shape["Treatments"] <- 4
+
+p_bray <- p_bray +
+  scale_shape_manual(values = p.shape)
+
+p_bray <- p_bray +
+  geom_polygon(aes(fill=Plant_Type),alpha = 0.2)+
+  scale_fill_manual(values = c("steelblue","lightpink","burlywood3"), 
+                    name = "Plant Type")
+
+p_bray
+
+## Jaccard
+
+p_jacc <- plot_ordination(Psoil_filt, J_ord16S, "samples", 
+                          color = "Plant_Type",
+                          shape = "Treatment")+
+  scale_color_manual(values = c("steelblue","lightpink","burlywood3"), name = "Plant Type")+
+  theme_bw()+
+  geom_point(size=3)
+
+shape_names <- c("Pi","Low P","Phi", "Pi/Phi mix")
+p.shape <- 15:(15 + length(shape_names) - 1)
+names(p.shape) <- shape_names
+p.shape["Treatments"] <- 4
+
+p_jacc <- p_jacc +
+  scale_shape_manual(values = p.shape)
+
+p_jacc <- p_jacc +
+  geom_polygon(aes(fill=Plant_Type),alpha = 0.2)+
+  scale_fill_manual(values = c("steelblue","lightpink","burlywood3"), 
+                    name = "Plant Type")
+
+p_jacc
+
+
+### ITS
+
+## Bray
+
+p_bray <- plot_ordination(ITS_filtered, bray_ord, "samples", 
+                          color = "Plant_Type",
+                          shape = "Treatment")+
+  scale_color_manual(values = c("steelblue","lightpink","burlywood3"), name = "Plant Type")+
+  theme_bw()+
+  geom_point(size=3)
+
+shape_names <- c("Pi","Low P","Phi", "Pi/Phi mix")
+p.shape <- 15:(15 + length(shape_names) - 1)
+names(p.shape) <- shape_names
+p.shape["Treatments"] <- 4
+
+p_bray <- p_bray +
+  scale_shape_manual(values = p.shape)
+
+p_bray <- p_bray +
+  geom_polygon(aes(fill=Plant_Type),alpha = 0.2)+
+  scale_fill_manual(values = c("steelblue","lightpink","burlywood3"), 
+                    name = "Plant Type")
+
+p_bray
+
+# Jaccard
+p_jacc <- plot_ordination(ITS_filtered, jacc_ord, "samples", 
+                          color = "Plant_Type",
+                          shape = "Treatment")+
+  scale_color_manual(values = c("steelblue","lightpink","burlywood3"), name = "Plant Type")+
+  theme_bw()+
+  geom_point(size=3)
+
+shape_names <- c("Pi","Low P","Phi", "Pi/Phi mix")
+p.shape <- 15:(15 + length(shape_names) - 1)
+names(p.shape) <- shape_names
+p.shape["Treatments"] <- 4
+
+p_jacc <- p_jacc +
+  scale_shape_manual(values = p.shape)
+
+p_jacc <- p_jacc +
+  geom_polygon(aes(fill=Plant_Type),alpha = 0.2)+
+  scale_fill_manual(values = c("steelblue","lightpink","burlywood3"), 
+                    name = "Plant Type")
+
+p_jacc
+```
+
+### Statistical analysis: PERMANOVA
+
+```{r}
+### Extract data frames from phyloseq object
+
+## count table: ASVs
+
+ASVs_ITS <- as.data.frame(ITS_filtered@otu_table)
+ASVs_16S <- as.data.frame(Psoil_filt@otu_table)
+
+## metadata or Environment
+
+SoilMeta <- read.csv("~/Grad_School/Maestria/Processed_data/metadata.csv")
+
+### Basic Adonis
+
+## 16S
+
+# Bray distance
+adonis2(ASVs_16S ~ Treatment * Plant_Type, 
+        data=SoilMeta, permutations = 999,
+        method = "bray") # no significant differences
+
+# Cao distance
+adonis2(ASVs_16S ~ Treatment * Plant_Type, 
+        data=SoilMeta, permutations = 999,
+        method = "cao")
+# plant type marginal difference p = 0.096
+
+# Jaccard
+adonis2(ASVs_16S ~ Treatment * Plant_Type, 
+        data=SoilMeta, permutations = 999,
+        method = "jaccard", binary = TRUE) # add binary 
+# no significant difference
+
+## ITS
+
+# Bray distance
+adonis2(ASVs_ITS ~ Treatment * Plant_Type, 
+        data=SoilMeta, permutations = 999,
+        method = "bray") # no significant differences
+
+# Cao distance
+adonis2(ASVs_ITS ~ Treatment * Plant_Type, 
+        data=SoilMeta, permutations = 999,
+        method = "cao")
+# plant type marginal difference p = 0.096
+
+# Jaccard
+adonis2(ASVs_ITS ~ Treatment * Plant_Type, 
+        data=SoilMeta, permutations = 999,
+        method = "jaccard", binary = TRUE) # add binary 
+# no significant difference
+
+```
+
+### Calculating Species Scores
+
+```{r}
+### 16S ###
+
+NMDS_16S <- metaMDS(ASVs_16S, distance = "bray")
+Scores_16S <- scores(NMDS_16S)
+Sites_16S <- as.data.frame(Scores_16S[["sites"]])
+
+## Plot scores 
+
+ggplot(data=Sites_16S) + 
+  stat_ellipse(aes(x=NMDS1,y=NMDS2,colour=SoilMeta$Plant_Type), type = "norm", level = 0.50) +
+  geom_point(aes(x=NMDS1,y=NMDS2,shape=SoilMeta$Treatment,colour=SoilMeta$Plant_Type),size=3) + 
+  theme_bw() 
+
+### ITS ###
+
+NMDS_ITS <- metaMDS(ASVs_ITS, distance = "bray")
+Scores_ITS <- scores(NMDS_ITS)
+Sites_ITS <- as.data.frame(Scores_ITS[["sites"]])
+
+## Plot scores 
+
+ggplot(data=Sites_ITS) + 
+  stat_ellipse(aes(x=NMDS1,y=NMDS2,colour=SoilMeta$Plant_Type), type = "norm", level = 0.50) +
+  geom_point(aes(x=NMDS1,y=NMDS2,shape=SoilMeta$Treatment,colour=SoilMeta$Plant_Type),size=3) + 
+  theme_bw() 
+```
+
+
